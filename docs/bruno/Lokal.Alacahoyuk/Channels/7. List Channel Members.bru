@@ -1,0 +1,19 @@
+meta {
+  name: 7. List Channel Members
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/channels/{{channelId}}/members
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

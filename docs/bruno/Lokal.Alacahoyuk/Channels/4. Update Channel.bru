@@ -1,0 +1,28 @@
+meta {
+  name: 4. Update Channel
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/channels/{{channelId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "general-updated",
+    "metadata": {
+      "topic": "Updated topic"
+    }
+  }
+}
+
+settings {
+  encodeUrl: true
+}

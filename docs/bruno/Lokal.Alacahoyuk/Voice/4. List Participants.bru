@@ -1,0 +1,19 @@
+meta {
+  name: 4. List Participants
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/voice/channels/{{voiceChannelId}}/participants
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

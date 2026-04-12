@@ -1,0 +1,19 @@
+meta {
+  name: 3. List Users
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/users
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

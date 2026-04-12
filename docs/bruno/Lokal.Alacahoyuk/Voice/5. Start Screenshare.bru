@@ -1,0 +1,25 @@
+meta {
+  name: 5. Start Screenshare
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/voice/channels/{{voiceChannelId}}/screenshare/start
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

@@ -1,0 +1,26 @@
+meta {
+  name: 2. Send Message (User 2)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/channels/{{channelId}}/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "content": "Hey, this is alice!",
+    "sender_id": "{{userId2}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

@@ -1,0 +1,79 @@
+#!/bin/bash
+set -eu
+
+# Build and push orda-server Docker image to ghcr.io.
+#
+# Setup (once per machine):
+#   docker login ghcr.io -u rwxdash
+#
+# Usage:
+#   bin/publish                         # working tree -> sha + dev
+#   bin/publish --release               # latest git tag -> version + latest
+#   bin/publish --release --tag=v0.1.0  # specific tag -> version + latest
+
+IMAGE="ghcr.io/orda-oss/orda-server"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PLATFORMS="linux/amd64,linux/arm64"
+
+RELEASE=false
+SPECIFIC_TAG=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --release) RELEASE=true ;;
+    --tag=*) SPECIFIC_TAG="${arg#--tag=}" ;;
+    *) echo "Usage: bin/publish [--release] [--tag=vX.Y.Z]"; exit 1 ;;
+  esac
+done
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+info()  { printf '%b\n' "${CYAN}[publish]${NC} $1"; }
+ok()    { printf '%b\n' "${GREEN}[publish]${NC} $1"; }
+fail()  { printf '%b\n' "${RED}[publish]${NC} $1"; exit 1; }
+
+# Ensure buildx builder exists for multi-platform
+if ! docker buildx inspect orda-server-builder >/dev/null 2>&1; then
+  info "Creating buildx builder..."
+  docker buildx create --name orda-server-builder --use >/dev/null
+else
+  docker buildx use orda-server-builder >/dev/null
+fi
+
+if [ "$RELEASE" = true ]; then
+    if [ -n "$SPECIFIC_TAG" ]; then
+        GIT_TAG="$SPECIFIC_TAG"
+    else
+        GIT_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1)
+    fi
+    [ -z "$GIT_TAG" ] && fail "No git tag found. Create a tag first: git tag v1.0.0-beta.1"
+
+    # Strip v prefix: v1.0.0-beta.1 -> 1.0.0-beta.1
+    VERSION="${GIT_TAG#v}"
+    TAG1="${IMAGE}:${VERSION}"
+    TAG2="${IMAGE}:latest"
+    LABEL="${VERSION} + latest"
+
+    TMPDIR=$(mktemp -d)
+    trap 'rm -rf "${TMPDIR}"' EXIT
+
+    info "Cloning ${GIT_TAG} into temp directory..."
+    git clone --depth 1 --branch "${GIT_TAG}" "${REPO_ROOT}" "${TMPDIR}/orda-server" 2>/dev/null || fail "Failed to clone at ${GIT_TAG}"
+
+    info "Building from ${GIT_TAG} [${LABEL}] (${PLATFORMS})..."
+    docker buildx build --platform "${PLATFORMS}" -t "${TAG1}" -t "${TAG2}" --push "${TMPDIR}/orda-server" || fail "Build failed"
+else
+    SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    TAG1="${IMAGE}:${SHA}"
+    TAG2="${IMAGE}:dev"
+    LABEL="${SHA} + dev"
+
+    info "Building from working tree [${LABEL}] (${PLATFORMS})..."
+    docker buildx build --platform "${PLATFORMS}" --build-arg FEATURES="" -t "${TAG1}" -t "${TAG2}" --push "${SCRIPT_DIR}" || fail "Build failed"
+fi
+
+ok "Pushed [${LABEL}]"

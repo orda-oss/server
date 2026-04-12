@@ -1,0 +1,19 @@
+meta {
+  name: 4. Search Messages
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/messages?content=hello
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

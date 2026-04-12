@@ -1,0 +1,26 @@
+meta {
+  name: 1. Send Message (REST)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/channels/{{channelId}}/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "content": "Hello from Bruno!",
+    "sender_id": "{{userId}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

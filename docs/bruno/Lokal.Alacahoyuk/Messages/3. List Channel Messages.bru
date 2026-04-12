@@ -1,0 +1,19 @@
+meta {
+  name: 3. List Channel Messages
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/channels/{{channelId}}/messages
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

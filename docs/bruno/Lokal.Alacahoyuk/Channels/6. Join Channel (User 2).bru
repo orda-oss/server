@@ -1,0 +1,25 @@
+meta {
+  name: 6. Join Channel (User 2)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/channels/{{channelId}}/join
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId2}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

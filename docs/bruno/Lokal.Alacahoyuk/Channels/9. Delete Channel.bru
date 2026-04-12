@@ -1,0 +1,19 @@
+meta {
+  name: 9. Delete Channel
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/channels/{{channelId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+settings {
+  encodeUrl: true
+}

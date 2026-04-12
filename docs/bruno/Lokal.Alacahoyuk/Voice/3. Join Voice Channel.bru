@@ -1,0 +1,25 @@
+meta {
+  name: 3. Join Voice Channel
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/voice/channels/{{voiceChannelId}}/join
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

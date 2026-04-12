@@ -1,0 +1,1 @@
+ALTER TABLE servers ADD COLUMN cert_version INTEGER DEFAULT 0;

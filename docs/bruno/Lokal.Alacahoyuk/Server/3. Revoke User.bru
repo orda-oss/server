@@ -1,0 +1,25 @@
+meta {
+  name: 3. Revoke User
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/internal/revoke
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{serviceToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

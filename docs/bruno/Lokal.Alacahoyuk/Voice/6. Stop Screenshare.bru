@@ -1,0 +1,25 @@
+meta {
+  name: 6. Stop Screenshare
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/voice/channels/{{voiceChannelId}}/screenshare/stop
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

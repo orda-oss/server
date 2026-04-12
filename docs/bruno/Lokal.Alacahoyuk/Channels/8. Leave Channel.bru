@@ -1,0 +1,25 @@
+meta {
+  name: 8. Leave Channel
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/channels/{{channelId}}/leave
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "user_id": "{{userId2}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

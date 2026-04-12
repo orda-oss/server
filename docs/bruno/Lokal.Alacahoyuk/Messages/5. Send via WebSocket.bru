@@ -1,0 +1,19 @@
+meta {
+  name: 5. Send via WebSocket
+  type: ws
+  seq: 5
+}
+
+ws {
+  url: ws://localhost:3000/ws?user_id={{userId}}
+  body: ws
+  auth: none
+}
+
+body:ws {
+  name: message
+  type: json
+  content: '''
+    {"action": "send_message", "channel_id": "{{channelId}}", "content": "hello from websocket"}
+  '''
+}
