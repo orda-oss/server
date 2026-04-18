@@ -96,10 +96,31 @@ async fn list_channels() {
 }
 
 #[tokio::test]
-async fn delete_channel() {
+async fn delete_channel_requires_archive_first() {
     let orbit = common::test_orbit();
     let (id, _) = common::create_channel(orbit.clone(), "user-1", json!({})).await;
 
+    // Deleting without archiving first should fail
+    let res = common::request(
+        orbit.clone(),
+        common::authed(Method::DELETE, &format!("/channels/{id}"), "user-1"),
+    )
+    .await;
+    assert_eq!(res.status().as_u16(), 403);
+
+    // Archive first
+    common::request(
+        orbit.clone(),
+        common::authed_json(
+            Method::PUT,
+            &format!("/channels/{id}"),
+            "user-1",
+            json!({"is_archived": true}),
+        ),
+    )
+    .await;
+
+    // Now delete should succeed
     let res = common::request(
         orbit,
         common::authed(Method::DELETE, &format!("/channels/{id}"), "user-1"),
@@ -111,11 +132,12 @@ async fn delete_channel() {
 // Channel update
 
 #[tokio::test]
-async fn update_public_channel_by_member() {
+async fn update_public_channel_by_non_creator_returns_403() {
     let orbit = common::test_orbit();
     let (id, _) = common::create_channel(orbit.clone(), "owner-up", json!({})).await;
     common::join_channel(orbit.clone(), &id, "member-up").await;
 
+    // Regular members can no longer edit channels they didn't create
     let res = common::request(
         orbit,
         common::authed_json(
@@ -126,8 +148,7 @@ async fn update_public_channel_by_member() {
         ),
     )
     .await;
-    assert_eq!(res.status().as_u16(), 200);
-    assert_eq!(common::body_json(res).await["data"]["name"], "renamed");
+    assert_eq!(res.status().as_u16(), 403);
 }
 
 #[tokio::test]

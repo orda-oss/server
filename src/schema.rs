@@ -9,6 +9,7 @@ diesel::table! {
         settings -> Text,
         joined_at -> Nullable<Text>,
         last_read_message_id -> Nullable<Text>,
+        channel_role -> Nullable<Text>,
     }
 }
 

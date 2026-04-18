@@ -206,6 +206,19 @@ async fn ws_channel_deleted_event() {
     let (channel_id, _) = common::create_channel(orbit.clone(), "ws-del-observer", json!({})).await;
     let _ = next_event(&mut ws).await; // channel_created
 
+    // Archive first (required before delete)
+    common::request(
+        orbit.clone(),
+        common::authed_json(
+            Method::PUT,
+            &format!("/channels/{channel_id}"),
+            "ws-del-observer",
+            json!({"is_archived": true}),
+        ),
+    )
+    .await;
+    let _ = next_event(&mut ws).await; // channel_updated
+
     common::request(
         orbit,
         common::authed(
@@ -400,3 +413,60 @@ async fn ws_without_auth_rejected() {
         }
     );
 }
+
+#[tokio::test]
+async fn ws_receives_member_role_updated() {
+    let orbit = common::test_orbit();
+    let addr = common::spawn_server(orbit.clone()).await;
+    common::ensure_user(orbit.clone(), "ws-role-target").await;
+    common::ensure_server_member(&orbit, "ws-role-target");
+
+    let mut ws = common::ws_connect(addr, "ws-role-target").await;
+
+    let res = common::request(
+        orbit,
+        common::authed_owner_json(
+            Method::PUT,
+            "/members/ws-role-target/role",
+            "ws-role-owner",
+            json!({"role_id": "role-mod"}),
+        ),
+    )
+    .await;
+    assert_eq!(res.status().as_u16(), 204);
+
+    let event = next_event(&mut ws).await;
+    assert_eq!(event["action"], "member_role_updated");
+    assert_eq!(event["user_id"], "ws-role-target");
+    assert_eq!(event["role_id"], "role-mod");
+
+    ws.close(None).await.ok();
+}
+
+#[tokio::test]
+async fn ws_receives_role_created() {
+    let orbit = common::test_orbit();
+    let addr = common::spawn_server(orbit.clone()).await;
+    common::ensure_user(orbit.clone(), "ws-role-watcher").await;
+
+    let mut ws = common::ws_connect(addr, "ws-role-watcher").await;
+
+    let res = common::request(
+        orbit,
+        common::authed_owner_json(
+            Method::POST,
+            "/roles",
+            "ws-role-creator",
+            json!({"name": "Spectator", "permissions": 0, "priority": 5}),
+        ),
+    )
+    .await;
+    assert_eq!(res.status().as_u16(), 200);
+
+    let event = next_event(&mut ws).await;
+    assert_eq!(event["action"], "role_created");
+    assert_eq!(event["role"]["name"], "Spectator");
+
+    ws.close(None).await.ok();
+}
+

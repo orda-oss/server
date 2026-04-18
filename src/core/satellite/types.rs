@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::models::{Channel, Message, UserStatus};
+use crate::core::models::{Channel, Message, Role, UserStatus};
 
 /// Voice mic status broadcast by each participant.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -49,7 +49,6 @@ pub enum ClientPayload {
 }
 
 /// Outbound (server-wide): events broadcast to every connected client.
-#[allow(dead_code)]
 #[derive(Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ServerEvent {
@@ -89,6 +88,22 @@ pub enum ServerEvent {
     },
     MaintenanceStarted,
     MaintenanceEnded,
+    RoleCreated {
+        role: Role,
+    },
+    RoleUpdated {
+        role: Role,
+    },
+    RoleDeleted {
+        role_id: String,
+    },
+    /// Emitted when a user's server-level role assignment changes. `role_id`
+    /// is `None` when the role was cleared. Target user's /me/permissions
+    /// just became stale and should be refetched.
+    MemberRoleUpdated {
+        user_id: String,
+        role_id: Option<String>,
+    },
 }
 
 /// Outbound (channel-scoped): events broadcast to all subscribers of a specific channel.
@@ -143,5 +158,12 @@ pub enum ChannelEvent {
     },
     ScreenshareStopped {
         channel_id: String,
+    },
+    /// Emitted when a channel member's channel_role (Manager/Moderator/null)
+    /// changes, so subscribed clients can update their cached member list.
+    MemberChannelRoleUpdated {
+        channel_id: String,
+        user_id: String,
+        channel_role: Option<String>,
     },
 }
