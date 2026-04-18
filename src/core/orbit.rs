@@ -78,6 +78,8 @@ impl Station {
         let server = Server::get_or_create(&mut conn, name, Some(server_id.to_string()))
             .map_err(|e| format!("Server record error: {e}"))?;
 
+        crate::core::roles::service::RoleService::seed_defaults(&mut conn);
+
         let (shutdown_tx, _) = watch::channel(false);
 
         Ok(Arc::new(Self {

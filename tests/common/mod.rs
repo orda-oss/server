@@ -47,6 +47,9 @@ fn shared_state() -> &'static (DbPool, Server, TestKeys) {
         )
         .unwrap();
 
+        // Seed default roles
+        alacahoyuk::core::roles::service::RoleService::seed_defaults(&mut conn);
+
         let signing_key = SigningKey::random(&mut p384::ecdsa::signature::rand_core::OsRng);
         use p384::pkcs8::{EncodePrivateKey, EncodePublicKey};
         let private_pem = signing_key.to_pkcs8_pem(Default::default()).unwrap();
@@ -81,10 +84,18 @@ struct AccessClaims {
 }
 
 pub fn access_token(user_id: &str, username: &str) -> String {
-    access_token_with(user_id, username, TEST_SERVER_REMOTE_ID, 3600)
+    access_token_full(user_id, username, TEST_SERVER_REMOTE_ID, 3600, false)
+}
+
+pub fn access_token_owner(user_id: &str) -> String {
+    access_token_full(user_id, user_id, TEST_SERVER_REMOTE_ID, 3600, true)
 }
 
 pub fn access_token_with(user_id: &str, username: &str, sid: &str, lifetime_secs: i64) -> String {
+    access_token_full(user_id, username, sid, lifetime_secs, false)
+}
+
+fn access_token_full(user_id: &str, username: &str, sid: &str, lifetime_secs: i64, owner: bool) -> String {
     let state = shared_state();
     let now = chrono::Utc::now().timestamp();
     let claims = AccessClaims {
@@ -92,7 +103,7 @@ pub fn access_token_with(user_id: &str, username: &str, sid: &str, lifetime_secs
         sid: sid.to_string(),
         token_type: "access".to_string(),
         name: username.to_string(),
-        owner: false,
+        owner,
         discriminator: 1234,
         staff: false,
         iat: now,
@@ -150,6 +161,34 @@ pub fn station(orbit: &Arc<Orbit>) -> Arc<Station> {
 }
 
 // Request helpers
+
+pub fn authed_owner(method: Method, uri: &str, user_id: &str) -> Request<Body> {
+    let token = access_token_owner(user_id);
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+pub fn authed_owner_json(
+    method: Method,
+    uri: &str,
+    user_id: &str,
+    body: serde_json::Value,
+) -> Request<Body> {
+    let token = access_token_owner(user_id);
+    let bytes = serde_json::to_vec(&body).unwrap();
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/json")
+        .header("content-length", bytes.len().to_string())
+        .body(Body::from(bytes))
+        .unwrap()
+}
 
 pub fn authed(method: Method, uri: &str, user_id: &str) -> Request<Body> {
     let token = access_token(user_id, user_id);
@@ -256,6 +295,40 @@ pub async fn join_channel(orbit: Arc<Orbit>, channel_id: &str, user_id: &str) {
 pub async fn ensure_user(orbit: Arc<Orbit>, user_id: &str) {
     request(orbit, authed(Method::GET, "/users", user_id)).await;
 }
+
+/// Ensure user exists as a server member (needed for role assignment).
+/// ensure_user creates the User row via JWT sync but NOT the server_member row.
+pub fn ensure_server_member(orbit: &Arc<Orbit>, user_id: &str) {
+    let station = orbit.default_station().unwrap();
+    let mut conn = station.pool.get().unwrap();
+    use alacahoyuk::schema::server_members;
+    diesel::insert_or_ignore_into(server_members::table)
+        .values((
+            server_members::server_id.eq("main"),
+            server_members::user_id.eq(user_id),
+            server_members::metadata.eq("{}"),
+        ))
+        .execute(&mut conn)
+        .expect("ensure_server_member insert failed");
+}
+
+/// Assign a server role to a user, bypassing the API so tests can set up an
+/// actor with a specific role without needing an owner token for every step.
+pub fn set_server_role(orbit: &Arc<Orbit>, user_id: &str, role_id: &str) {
+    let station = orbit.default_station().unwrap();
+    let mut conn = station.pool.get().unwrap();
+    use alacahoyuk::schema::server_members;
+    diesel::update(
+        server_members::table
+            .filter(server_members::user_id.eq(user_id))
+            .filter(server_members::server_id.eq("main")),
+    )
+    .set(server_members::role_id.eq(role_id))
+    .execute(&mut conn)
+    .expect("set_server_role update failed");
+}
+
+use diesel::prelude::*;
 
 // WebSocket helpers
 

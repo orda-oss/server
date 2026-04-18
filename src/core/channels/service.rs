@@ -105,8 +105,11 @@ impl ChannelService {
     pub async fn list(
         station: Arc<Station>,
         filter: ChannelFilterDto,
-        user_id: String,
     ) -> ApiResult<Vec<Channel>> {
+        // All channels on the server are discoverable by any authenticated
+        // member, including private ones. Listing only returns metadata; joining,
+        // sending messages, or reading history still require membership and are
+        // enforced at the relevant endpoints.
         let channel_list = tokio::task::spawn_blocking(move || {
             let mut conn = station.pool.get().map_err(ApiError::internal)?;
 
@@ -140,26 +143,7 @@ impl ChannelService {
                 _ => query = query.order(name.asc()),
             }
 
-            let results = query
-                .load::<Channel>(&mut conn)
-                .map_err(ApiError::internal)?;
-
-            // Filter out private channels the user is not a member of
-            use crate::schema::channel_members::dsl as cm;
-            let memberships: std::collections::HashSet<String> = cm::channel_members
-                .filter(cm::user_id.eq(&user_id))
-                .select(cm::channel_id)
-                .load::<String>(&mut conn)
-                .map_err(ApiError::internal)?
-                .into_iter()
-                .collect();
-
-            let filtered: Vec<Channel> = results
-                .into_iter()
-                .filter(|c| c.is_private != Some(true) || memberships.contains(&c.id))
-                .collect();
-
-            Ok(filtered)
+            query.load::<Channel>(&mut conn).map_err(ApiError::internal)
         })
         .await
         .map_err(ApiError::internal)??;
@@ -173,6 +157,7 @@ impl ChannelService {
         channel_id: String,
         payload: UpdateChannelDto,
         user_id: String,
+        is_owner: bool,
     ) -> ApiResult<Channel> {
         let station_c = station.clone();
         let updated_channel = tokio::task::spawn_blocking(move || {
@@ -189,9 +174,13 @@ impl ChannelService {
                     _ => ApiError::internal(e),
                 })?;
 
-            // Private channels: only creator can edit. Public: any member can edit.
-            if target.is_private == Some(true) && target.created_by != user_id {
-                return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+            // Creator can always edit their own channel. Otherwise need channel manager
+            // role or server MANAGE_CHANNELS permission.
+            let is_creator = target.created_by == user_id;
+            if !is_creator {
+                crate::core::permissions::require_channel_management(
+                    &mut conn, &user_id, &channel_id, is_owner, false,
+                )?;
             }
 
             let mut new_slug = None;
@@ -308,6 +297,7 @@ impl ChannelService {
         station: Arc<Station>,
         target_id: String,
         user_id: String,
+        is_owner: bool,
     ) -> ApiResult<()> {
         let station_c = station.clone();
         let deleted_id = tokio::task::spawn_blocking(move || {
@@ -323,9 +313,18 @@ impl ChannelService {
                     _ => ApiError::internal(e),
                 })?;
 
-            // Private channels: only creator can delete. Public: any member can delete.
-            if target.is_private == Some(true) && target.created_by != user_id {
-                return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+            // Channel must be archived before deletion
+            if target.is_archived != Some(true) {
+                return Err(ApiError::forbidden(codes::ERR_CHANNEL_NOT_ARCHIVED));
+            }
+
+            // Creator can always delete their own channel. Otherwise need channel manager
+            // role or server MANAGE_CHANNELS permission.
+            let is_creator = target.created_by == user_id;
+            if !is_creator {
+                crate::core::permissions::require_channel_management(
+                    &mut conn, &user_id, &target_id, is_owner, false,
+                )?;
             }
 
             diesel::delete(channels.find(&target_id))

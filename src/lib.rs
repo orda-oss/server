@@ -95,6 +95,8 @@ pub fn build_router(orbit: Arc<Orbit>) -> axum::Router {
         .merge(core::messages::router())
         .merge(core::servers::router())
         .merge(core::voice::router())
+        .merge(core::roles::router())
+        .merge(core::meta::router())
         .merge(core::internal::router())
         .layer(middleware::from_fn_with_state(
             orbit.clone(),

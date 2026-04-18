@@ -18,7 +18,6 @@ pub struct AccessClaims {
     #[serde(rename = "type")]
     pub token_type: String,
     pub name: String,
-    #[allow(dead_code)]
     pub owner: bool,
     #[serde(default = "default_discriminator")]
     pub discriminator: i32,
@@ -33,6 +32,7 @@ fn default_discriminator() -> i32 {
 // Resolves both the user_id and the per-server Station from the JWT sid claim.
 pub struct AuthContext {
     pub user_id: String,
+    pub is_owner: bool,
     pub station: Arc<Station>,
 }
 
@@ -57,7 +57,7 @@ impl FromRequestParts<Arc<Orbit>> for AuthContext {
                     let station = state
                         .default_station()
                         .ok_or_else(|| ApiError::unauthorized(codes::ERR_SERVER_MISMATCH))?;
-                    return Ok(AuthContext { user_id, station });
+                    return Ok(AuthContext { user_id, is_owner: true, station });
                 } else {
                     return Err(ApiError::unauthorized(codes::ERR_MISSING_TOKEN));
                 }
@@ -113,6 +113,7 @@ impl FromRequestParts<Arc<Orbit>> for AuthContext {
 
         Ok(AuthContext {
             user_id: claims.sub,
+            is_owner: claims.owner,
             station,
         })
     }

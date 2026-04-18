@@ -39,7 +39,7 @@ pub struct Server {
     pub cert_version: Option<i32>,
 }
 
-#[derive(Queryable, Insertable, Selectable, Identifiable, Associations, Debug, Serialize)]
+#[derive(Queryable, Insertable, Selectable, Identifiable, Associations, Debug, Clone, Serialize)]
 #[diesel(belongs_to(Server))]
 #[diesel(check_for_backend(Sqlite))]
 #[diesel(table_name = roles)]
@@ -135,6 +135,8 @@ pub struct ChannelMember {
     pub settings: SqliteJson<serde_json::Value>,
     pub joined_at: Option<String>,
     pub last_read_message_id: Option<String>,
+    /// Channel-level role: "manager", "moderator", or NULL (regular member).
+    pub channel_role: Option<String>,
 }
 
 #[derive(

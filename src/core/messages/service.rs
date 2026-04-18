@@ -17,11 +17,13 @@ use crate::{
     },
 };
 
-/// Loads the channel and rejects writes if archived or if broadcast and non-creator.
+/// Loads the channel and rejects writes if archived or if broadcast and not authorized.
+/// Broadcast channels allow: creator, channel moderator+, server MANAGE_CHANNELS/admin.
 fn check_channel_writable(
     conn: &mut diesel::SqliteConnection,
     target_channel_id: &str,
     sender_id: Option<&str>,
+    is_owner: bool,
 ) -> Result<(), ApiError> {
     use crate::schema::channels::dsl as ch;
     let channel = ch::channels
@@ -38,7 +40,11 @@ fn check_channel_writable(
             && matches!(channel.kind, ChannelKind::Broadcast)
             && channel.created_by != uid
         {
-            return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+            // Not the creator - check if they have moderation rights
+            let is_creator = false;
+            crate::core::permissions::require_channel_moderation(
+                conn, uid, target_channel_id, is_owner, is_creator,
+            )?;
         }
     }
     Ok(())
@@ -99,7 +105,7 @@ impl MessageService {
                 return Err(ApiError::forbidden(codes::ERR_CHANNEL_NOT_A_MEMBER));
             }
 
-            check_channel_writable(&mut conn, &target_channel_id, Some(&payload.sender_id))?;
+            check_channel_writable(&mut conn, &target_channel_id, Some(&payload.sender_id), false)?;
 
             let new_message = Message {
                 id: Uuid::now_v7().to_string(),
@@ -223,7 +229,7 @@ impl MessageService {
         let updated_msg = tokio::task::spawn_blocking(move || {
             let mut conn = station_c.pool.get().map_err(ApiError::internal)?;
 
-            check_channel_writable(&mut conn, &target_channel_id, None)?;
+            check_channel_writable(&mut conn, &target_channel_id, None, false)?;
 
             check_membership(&mut conn, &target_channel_id, &user_id)?;
 
@@ -324,6 +330,7 @@ impl MessageService {
         target_channel_id: String,
         message_id: String,
         requesting_user_id: String,
+        is_owner: bool,
     ) -> ApiResult<()> {
         let station_c = station.clone();
         let cid_c = target_channel_id.clone();
@@ -332,7 +339,7 @@ impl MessageService {
         tokio::task::spawn_blocking(move || {
             let mut conn = station_c.pool.get().map_err(ApiError::internal)?;
 
-            check_channel_writable(&mut conn, &target_channel_id, None)?;
+            check_channel_writable(&mut conn, &target_channel_id, None, false)?;
 
             check_membership(&mut conn, &target_channel_id, &requesting_user_id)?;
 
@@ -347,8 +354,17 @@ impl MessageService {
                     _ => ApiError::internal(e),
                 })?;
 
+            // Author can always delete their own. Otherwise need channel moderator+
+            // or server MANAGE_MESSAGES.
             if msg.sender_id != requesting_user_id {
-                return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+                let channel = crate::schema::channels::table
+                    .find(&target_channel_id)
+                    .first::<Channel>(&mut conn)
+                    .map_err(ApiError::internal)?;
+                let is_creator = channel.created_by == requesting_user_id;
+                crate::core::permissions::require_channel_moderation(
+                    &mut conn, &requesting_user_id, &target_channel_id, is_owner, is_creator,
+                )?;
             }
 
             diesel::update(messages::table.find(&message_id))
@@ -378,6 +394,7 @@ impl MessageService {
         target_channel_id: String,
         message_id: String,
         requesting_user_id: String,
+        is_owner: bool,
     ) -> ApiResult<Message> {
         let station_c = station.clone();
         let cid_c = target_channel_id.clone();
@@ -385,7 +402,7 @@ impl MessageService {
         let restored_msg = tokio::task::spawn_blocking(move || {
             let mut conn = station_c.pool.get().map_err(ApiError::internal)?;
 
-            check_channel_writable(&mut conn, &target_channel_id, None)?;
+            check_channel_writable(&mut conn, &target_channel_id, None, false)?;
             check_membership(&mut conn, &target_channel_id, &requesting_user_id)?;
 
             let msg = messages::table
@@ -399,8 +416,17 @@ impl MessageService {
                     _ => ApiError::internal(e),
                 })?;
 
+            // Author can always restore. Otherwise need channel moderator+ or
+            // server MANAGE_MESSAGES.
             if msg.sender_id != requesting_user_id {
-                return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+                let channel = crate::schema::channels::table
+                    .find(&target_channel_id)
+                    .first::<Channel>(&mut conn)
+                    .map_err(ApiError::internal)?;
+                let is_creator = channel.created_by == requesting_user_id;
+                crate::core::permissions::require_channel_moderation(
+                    &mut conn, &requesting_user_id, &target_channel_id, is_owner, is_creator,
+                )?;
             }
 
             let restored = diesel::update(messages::table.find(&message_id))

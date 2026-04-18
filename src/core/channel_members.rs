@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 
 use crate::Orbit;
@@ -28,5 +28,9 @@ pub fn router() -> Router<Arc<Orbit>> {
         .route(
             "/channels/{channel_id}/members/{user_id}",
             delete(handlers::remove_member),
+        )
+        .route(
+            "/channels/{channel_id}/members/{user_id}/role",
+            put(handlers::set_channel_role),
         )
 }

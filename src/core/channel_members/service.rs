@@ -8,7 +8,7 @@ use crate::{
     Station,
     core::{
         channel_members::dto::ListMemberDto,
-        models::{ChannelMember, Message, MessageKind, User},
+        models::{Channel, ChannelMember, Message, MessageKind, User},
         satellite::{ChannelEvent, UserCommand},
         types::SqliteJson,
         voice::service::VoiceService,
@@ -69,6 +69,7 @@ impl MembershipService {
                 settings: SqliteJson(serde_json::json!({})),
                 joined_at: Some(now_rfc3339()),
                 last_read_message_id: None,
+                channel_role: None,
             };
 
             let inserted = diesel::insert_into(channel_members)
@@ -322,12 +323,14 @@ impl MembershipService {
         Ok(ApiResponse::empty())
     }
 
-    // 5. ADD MEMBER (for private channels - any member can add a server member)
+    // 5. ADD MEMBER
+    // Public channels: any member can add. Private: creator, channel manager, or MANAGE_MEMBERS.
     pub async fn add_member(
         station: Arc<Station>,
         target_channel_id: String,
         adder_user_id: String,
         target_user_id: String,
+        is_owner: bool,
     ) -> ApiResult<()> {
         let cid = target_channel_id.clone();
         let tid = target_user_id.clone();
@@ -345,6 +348,19 @@ impl MembershipService {
                 .map_err(ApiError::internal)?;
             if adder_count == 0 {
                 return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+            }
+
+            // For private channels, require channel manager or server MANAGE_MEMBERS
+            let channel = crate::schema::channels::table
+                .find(&target_channel_id)
+                .first::<Channel>(&mut conn)
+                .map_err(|_| ApiError::not_found(codes::ERR_CHANNEL_NOT_FOUND))?;
+
+            if channel.is_private == Some(true) {
+                let is_creator = channel.created_by == adder_user_id;
+                crate::core::permissions::require_member_management(
+                    &mut conn, &adder_user_id, &target_channel_id, is_owner, is_creator,
+                )?;
             }
 
             // Verify target user exists on this server
@@ -374,6 +390,7 @@ impl MembershipService {
                 settings: SqliteJson(serde_json::json!({})),
                 joined_at: Some(now.clone()),
                 last_read_message_id: None,
+                channel_role: None,
             };
 
             let inserted = diesel::insert_into(channel_members)
@@ -462,12 +479,13 @@ impl MembershipService {
         Ok(ApiResponse::empty())
     }
 
-    // 6. REMOVE MEMBER (channel creator only)
+    // 6. REMOVE MEMBER (creator, channel manager, or server MANAGE_MEMBERS)
     pub async fn remove_member(
         station: Arc<Station>,
         target_channel_id: String,
         remover_user_id: String,
         target_user_id: String,
+        is_owner: bool,
     ) -> ApiResult<()> {
         let cid = target_channel_id.clone();
         let tid = target_user_id.clone();
@@ -476,7 +494,7 @@ impl MembershipService {
         let system_msg = tokio::task::spawn_blocking(move || {
             let mut conn = station_c.pool.get().map_err(ApiError::internal)?;
 
-            // Verify remover is the channel creator
+            // Load channel to check creator
             use crate::schema::channels::dsl as ch;
             let creator: String = ch::channels
                 .find(&target_channel_id)
@@ -484,8 +502,12 @@ impl MembershipService {
                 .first(&mut conn)
                 .map_err(|_| ApiError::not_found(codes::ERR_CHANNEL_NOT_FOUND))?;
 
-            if creator != remover_user_id {
-                return Err(ApiError::forbidden(codes::ERR_FORBIDDEN));
+            // Creator, channel manager, or server MANAGE_MEMBERS can remove
+            let is_creator = creator == remover_user_id;
+            if !is_creator {
+                crate::core::permissions::require_member_management(
+                    &mut conn, &remover_user_id, &target_channel_id, is_owner, false,
+                )?;
             }
 
             // Can't remove yourself
@@ -568,15 +590,17 @@ impl MembershipService {
         Ok(ApiResponse::empty())
     }
 
-    /// Lists channel members with a denormalized `UserSummary` embedded in each
-    /// row. The `inner_join(users.on(id.eq(user_id)))` lets Diesel load both
-    /// `ChannelMember` and `User` in one query; `ListMemberDto::from` then
-    /// projects the tuple into the API shape.
+    /// Lists channel members with a denormalized `UserSummary` and the user's
+    /// server-level role id embedded in each row. The server role is fetched
+    /// in a second query against `server_members` since dsl wildcard imports
+    /// make a three-way join ambiguous.
     pub async fn list(
         station: Arc<Station>,
         target_channel_id: String,
         filter: MemberFilterDto,
     ) -> ApiResult<Vec<ListMemberDto>> {
+        use std::collections::HashMap;
+
         let member_list = tokio::task::spawn_blocking(move || {
             let mut conn = station.pool.get().map_err(ApiError::internal)?;
 
@@ -584,9 +608,6 @@ impl MembershipService {
                 .inner_join(users.on(id.eq(user_id)))
                 .filter(channel_id.eq(target_channel_id))
                 .into_boxed();
-
-            // TODO: We should .inner_join(users::table) here
-            // to return { user_id, username, avatar } instead of just the link record.
 
             query = query
                 .limit(filter.limit.unwrap_or(50))
@@ -597,8 +618,26 @@ impl MembershipService {
                 .load::<(ChannelMember, User)>(&mut conn)
                 .map_err(ApiError::internal)?;
 
-            let response: Vec<ListMemberDto> =
-                results.into_iter().map(ListMemberDto::from).collect();
+            let user_ids: Vec<String> = results.iter().map(|(_, u)| u.id.clone()).collect();
+
+            let server_roles: Vec<(String, Option<String>)> = crate::schema::server_members::table
+                .filter(crate::schema::server_members::user_id.eq_any(&user_ids))
+                .select((
+                    crate::schema::server_members::user_id,
+                    crate::schema::server_members::role_id,
+                ))
+                .load(&mut conn)
+                .map_err(ApiError::internal)?;
+
+            let role_map: HashMap<String, Option<String>> = server_roles.into_iter().collect();
+
+            let response: Vec<ListMemberDto> = results
+                .into_iter()
+                .map(|(member, user)| {
+                    let server_role_id = role_map.get(&user.id).cloned().flatten();
+                    ListMemberDto::new(member, user, server_role_id)
+                })
+                .collect();
 
             Ok(response)
         })
@@ -607,5 +646,86 @@ impl MembershipService {
 
         tracing::debug!(count = member_list.len(), "Channel members listed");
         Ok(ApiResponse::ok(member_list))
+    }
+
+    // 8. SET CHANNEL ROLE (creator, channel manager, or server MANAGE_CHANNELS)
+    pub async fn set_channel_role(
+        station: Arc<Station>,
+        target_channel_id: String,
+        actor_user_id: String,
+        target_user_id: String,
+        role: Option<String>,
+        is_owner: bool,
+    ) -> ApiResult<()> {
+        let station_c = station.clone();
+        let channel_c = target_channel_id.clone();
+        let target_c = target_user_id.clone();
+        let role_c = role.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = station_c.pool.get().map_err(ApiError::internal)?;
+            let target_channel_id = channel_c;
+            let target_user_id = target_c;
+            let role = role_c;
+
+            // Validate role value. Use null to clear, not empty string.
+            if let Some(ref r) = role {
+                if crate::core::permissions::ChannelRole::from_str_opt(Some(r)).is_none() {
+                    return Err(ApiError::bad_request(codes::ERR_VALIDATION_FAILED));
+                }
+            }
+
+            // Load channel to check creator
+            let channel = crate::schema::channels::table
+                .find(&target_channel_id)
+                .first::<Channel>(&mut conn)
+                .map_err(|_| ApiError::not_found(codes::ERR_CHANNEL_NOT_FOUND))?;
+
+            // Only creator, channel managers, or server admins can set channel roles
+            let is_creator = channel.created_by == actor_user_id;
+            crate::core::permissions::require_channel_management(
+                &mut conn, &actor_user_id, &target_channel_id, is_owner, is_creator,
+            )?;
+
+            // Verify target is a member
+            let member_count: i64 = channel_members
+                .filter(channel_id.eq(&target_channel_id))
+                .filter(user_id.eq(&target_user_id))
+                .count()
+                .get_result(&mut conn)
+                .map_err(ApiError::internal)?;
+            if member_count == 0 {
+                return Err(ApiError::not_found(codes::ERR_CHANNEL_NOT_A_MEMBER));
+            }
+
+            diesel::update(
+                channel_members
+                    .filter(channel_id.eq(&target_channel_id))
+                    .filter(user_id.eq(&target_user_id)),
+            )
+            .set(crate::schema::channel_members::channel_role.eq(&role))
+            .execute(&mut conn)
+            .map_err(ApiError::internal)?;
+
+            tracing::debug!(
+                channel_id = %target_channel_id,
+                target = %target_user_id,
+                role = ?role,
+                "Channel role updated"
+            );
+            Ok(())
+        })
+        .await
+        .map_err(ApiError::internal)??;
+
+        station.satellite.broadcast_channel(
+            &target_channel_id,
+            &ChannelEvent::MemberChannelRoleUpdated {
+                channel_id: target_channel_id.clone(),
+                user_id: target_user_id,
+                channel_role: role,
+            },
+        );
+
+        Ok(ApiResponse::empty())
     }
 }

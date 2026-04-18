@@ -304,11 +304,13 @@ async fn handle_member_added(station: &Arc<Station>, event: &MembershipEventDto)
             ))
             .execute(&mut conn);
 
-        // Upsert server_member
+        // Upsert server_member. Seed role_id to the built-in Member role so
+        // every joiner picks up the "everyone" baseline role automatically.
         let _ = diesel::insert_into(server_members::table)
             .values((
                 server_members::server_id.eq("main"),
                 server_members::user_id.eq(&uid),
+                server_members::role_id.eq(crate::core::permissions::ROLE_MEMBER_ID),
                 server_members::metadata.eq("{}"),
                 server_members::joined_at.eq(now_rfc3339()),
             ))

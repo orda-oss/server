@@ -19,12 +19,11 @@ pub struct AddMemberDto {
     pub user_id: String,
 }
 
-// Used if we add "Invite" logic later, or "Update Member Role"
-#[allow(dead_code)]
+// Set channel-level role for a member
 #[derive(Debug, Deserialize, Validate)]
-pub struct UpdateMemberDto {
-    pub role_id: Option<String>,
-    // settings: Option<...>
+pub struct ChannelRoleDto {
+    /// "manager", "moderator", or null to clear
+    pub role: Option<String>,
 }
 
 /// Response shape for a single channel member. `#[serde(flatten)]` inlines all
@@ -33,9 +32,13 @@ pub struct UpdateMemberDto {
 /// to distinguish it from the membership fields.
 #[derive(Debug, Serialize)]
 pub struct ListMemberDto {
-    // Flatten member fields (joined_at, role_id)
+    // Flatten member fields (joined_at, role_id, channel_role)
     #[serde(flatten)]
     pub member: ChannelMember,
+
+    // Server-level role id from server_members (joined at query time). Distinct
+    // from the unused channel_members.role_id and from channel_members.channel_role.
+    pub server_role_id: Option<String>,
 
     // Embed user info (username, avatar)
     pub details: UserSummary,
@@ -47,11 +50,11 @@ pub struct UserSummary {
     // Add avatar here later if you have it in metadata
 }
 
-impl From<(ChannelMember, User)> for ListMemberDto {
-    fn from(tuple: (ChannelMember, User)) -> Self {
-        let (member, user) = tuple;
+impl ListMemberDto {
+    pub fn new(member: ChannelMember, user: User, server_role_id: Option<String>) -> Self {
         Self {
             member,
+            server_role_id,
             details: UserSummary {
                 username: user.username,
             },
