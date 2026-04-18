@@ -10,11 +10,7 @@ async fn list_roles_returns_default_roles() {
     let orbit = common::test_orbit();
     common::ensure_user(orbit.clone(), "role-lister").await;
 
-    let res = common::request(
-        orbit,
-        common::authed(Method::GET, "/roles", "role-lister"),
-    )
-    .await;
+    let res = common::request(orbit, common::authed(Method::GET, "/roles", "role-lister")).await;
     assert_eq!(res.status().as_u16(), 200);
 
     let body = common::body_json(res).await;
@@ -530,7 +526,8 @@ async fn channel_moderator_can_delete_others_messages() {
     common::join_channel(orbit.clone(), &ch_id, "mod-del-mod").await;
 
     // Send a message
-    let (msg_id, _) = common::create_message(orbit.clone(), &ch_id, "mod-del-sender", "hello").await;
+    let (msg_id, _) =
+        common::create_message(orbit.clone(), &ch_id, "mod-del-sender", "hello").await;
 
     // Regular member can't delete others' messages
     let res = common::request(
@@ -640,12 +637,8 @@ async fn channel_manager_can_remove_members() {
 #[tokio::test]
 async fn broadcast_posting_restricted() {
     let orbit = common::test_orbit();
-    let (ch_id, _) = common::create_channel(
-        orbit.clone(),
-        "bcast-owner",
-        json!({"kind": "broadcast"}),
-    )
-    .await;
+    let (ch_id, _) =
+        common::create_channel(orbit.clone(), "bcast-owner", json!({"kind": "broadcast"})).await;
     common::join_channel(orbit.clone(), &ch_id, "bcast-member").await;
     common::join_channel(orbit.clone(), &ch_id, "bcast-mod").await;
 

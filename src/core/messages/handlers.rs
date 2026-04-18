@@ -14,7 +14,9 @@ use crate::{
 
 // POST /channels/:id/messages
 pub async fn create(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path(channel_id): Path<String>,
     ValidatedJson(payload): ValidatedJson<CreateMessageDto>,
 ) -> ApiResult<Message> {
@@ -23,7 +25,9 @@ pub async fn create(
 }
 
 pub async fn list(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path(channel_id): Path<String>,
     ValidatedQuery(filter): ValidatedQuery<MessageFilterDto>,
 ) -> ApiResult<Vec<Message>> {
@@ -33,7 +37,11 @@ pub async fn list(
 
 // DELETE /channels/:channel_id/messages/:message_id
 pub async fn delete(
-    AuthContext { user_id, is_owner, station }: AuthContext,
+    AuthContext {
+        user_id,
+        is_owner,
+        station,
+    }: AuthContext,
     Path((channel_id, message_id)): Path<(String, String)>,
 ) -> ApiResult<()> {
     tracing::debug!(channel_id = %channel_id, message_id = %message_id, "Deleting message");
@@ -42,7 +50,9 @@ pub async fn delete(
 
 // PUT /channels/:channel_id/messages/:message_id
 pub async fn edit(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path((channel_id, message_id)): Path<(String, String)>,
     ValidatedJson(payload): ValidatedJson<EditMessageDto>,
 ) -> ApiResult<Message> {
@@ -52,7 +62,11 @@ pub async fn edit(
 
 // PUT /channels/:channel_id/messages/:message_id/restore
 pub async fn restore(
-    AuthContext { user_id, is_owner, station }: AuthContext,
+    AuthContext {
+        user_id,
+        is_owner,
+        station,
+    }: AuthContext,
     Path((channel_id, message_id)): Path<(String, String)>,
 ) -> ApiResult<Message> {
     tracing::debug!(channel_id = %channel_id, message_id = %message_id, "Restoring message");

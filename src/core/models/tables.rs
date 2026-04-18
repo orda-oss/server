@@ -39,7 +39,9 @@ pub struct Server {
     pub cert_version: Option<i32>,
 }
 
-#[derive(Queryable, Insertable, Selectable, Identifiable, Associations, Debug, Clone, Serialize)]
+#[derive(
+    Queryable, Insertable, Selectable, Identifiable, Associations, Debug, Clone, Serialize,
+)]
 #[diesel(belongs_to(Server))]
 #[diesel(check_for_backend(Sqlite))]
 #[diesel(table_name = roles)]

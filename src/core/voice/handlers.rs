@@ -44,7 +44,9 @@ pub async fn voice_status(
 /// POST /voice/channels/:channel_id/join
 pub async fn voice_join(
     State(orbit): State<Arc<Orbit>>,
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
 ) -> ApiResult<serde_json::Value> {
@@ -75,7 +77,9 @@ pub async fn voice_join(
 
 /// POST /voice/channels/:channel_id/leave
 pub async fn voice_leave(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path(channel_id): Path<String>,
 ) -> ApiResult<()> {
     VoiceService::leave(station, channel_id, user_id).await
@@ -98,7 +102,9 @@ pub async fn voice_counts(
 
 /// POST /voice/channels/:channel_id/screenshare/start
 pub async fn screenshare_start(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path(channel_id): Path<String>,
 ) -> ApiResult<()> {
     match VoiceService::handle_screenshare_start(&station, &channel_id, &user_id) {
@@ -110,7 +116,9 @@ pub async fn screenshare_start(
 
 /// POST /voice/channels/:channel_id/screenshare/stop
 pub async fn screenshare_stop(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     Path(channel_id): Path<String>,
 ) -> ApiResult<()> {
     VoiceService::handle_screenshare_stop(&station, &channel_id, &user_id);

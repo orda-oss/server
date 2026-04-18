@@ -43,7 +43,11 @@ fn check_channel_writable(
             // Not the creator - check if they have moderation rights
             let is_creator = false;
             crate::core::permissions::require_channel_moderation(
-                conn, uid, target_channel_id, is_owner, is_creator,
+                conn,
+                uid,
+                target_channel_id,
+                is_owner,
+                is_creator,
             )?;
         }
     }
@@ -105,7 +109,12 @@ impl MessageService {
                 return Err(ApiError::forbidden(codes::ERR_CHANNEL_NOT_A_MEMBER));
             }
 
-            check_channel_writable(&mut conn, &target_channel_id, Some(&payload.sender_id), false)?;
+            check_channel_writable(
+                &mut conn,
+                &target_channel_id,
+                Some(&payload.sender_id),
+                false,
+            )?;
 
             let new_message = Message {
                 id: Uuid::now_v7().to_string(),
@@ -363,7 +372,11 @@ impl MessageService {
                     .map_err(ApiError::internal)?;
                 let is_creator = channel.created_by == requesting_user_id;
                 crate::core::permissions::require_channel_moderation(
-                    &mut conn, &requesting_user_id, &target_channel_id, is_owner, is_creator,
+                    &mut conn,
+                    &requesting_user_id,
+                    &target_channel_id,
+                    is_owner,
+                    is_creator,
                 )?;
             }
 
@@ -425,7 +438,11 @@ impl MessageService {
                     .map_err(ApiError::internal)?;
                 let is_creator = channel.created_by == requesting_user_id;
                 crate::core::permissions::require_channel_moderation(
-                    &mut conn, &requesting_user_id, &target_channel_id, is_owner, is_creator,
+                    &mut conn,
+                    &requesting_user_id,
+                    &target_channel_id,
+                    is_owner,
+                    is_creator,
                 )?;
             }
 

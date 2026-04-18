@@ -359,7 +359,11 @@ impl MembershipService {
             if channel.is_private == Some(true) {
                 let is_creator = channel.created_by == adder_user_id;
                 crate::core::permissions::require_member_management(
-                    &mut conn, &adder_user_id, &target_channel_id, is_owner, is_creator,
+                    &mut conn,
+                    &adder_user_id,
+                    &target_channel_id,
+                    is_owner,
+                    is_creator,
                 )?;
             }
 
@@ -506,7 +510,11 @@ impl MembershipService {
             let is_creator = creator == remover_user_id;
             if !is_creator {
                 crate::core::permissions::require_member_management(
-                    &mut conn, &remover_user_id, &target_channel_id, is_owner, false,
+                    &mut conn,
+                    &remover_user_id,
+                    &target_channel_id,
+                    is_owner,
+                    false,
                 )?;
             }
 
@@ -668,10 +676,10 @@ impl MembershipService {
             let role = role_c;
 
             // Validate role value. Use null to clear, not empty string.
-            if let Some(ref r) = role {
-                if crate::core::permissions::ChannelRole::from_str_opt(Some(r)).is_none() {
-                    return Err(ApiError::bad_request(codes::ERR_VALIDATION_FAILED));
-                }
+            if let Some(ref r) = role
+                && crate::core::permissions::ChannelRole::from_str_opt(Some(r)).is_none()
+            {
+                return Err(ApiError::bad_request(codes::ERR_VALIDATION_FAILED));
             }
 
             // Load channel to check creator
@@ -683,7 +691,11 @@ impl MembershipService {
             // Only creator, channel managers, or server admins can set channel roles
             let is_creator = channel.created_by == actor_user_id;
             crate::core::permissions::require_channel_management(
-                &mut conn, &actor_user_id, &target_channel_id, is_owner, is_creator,
+                &mut conn,
+                &actor_user_id,
+                &target_channel_id,
+                is_owner,
+                is_creator,
             )?;
 
             // Verify target is a member
