@@ -102,10 +102,7 @@ impl ChannelService {
         Ok(ApiResponse::created(new_channel))
     }
 
-    pub async fn list(
-        station: Arc<Station>,
-        filter: ChannelFilterDto,
-    ) -> ApiResult<Vec<Channel>> {
+    pub async fn list(station: Arc<Station>, filter: ChannelFilterDto) -> ApiResult<Vec<Channel>> {
         // All channels on the server are discoverable by any authenticated
         // member, including private ones. Listing only returns metadata; joining,
         // sending messages, or reading history still require membership and are

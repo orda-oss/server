@@ -15,7 +15,9 @@ use crate::{
 };
 
 pub async fn create(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     ValidatedJson(payload): ValidatedJson<CreateChannelDto>,
 ) -> ApiResult<Channel> {
     tracing::debug!(user_id = %user_id, "Creating channel: {}", payload.name);
@@ -31,7 +33,11 @@ pub async fn list(
 }
 
 pub async fn update(
-    AuthContext { user_id, is_owner, station }: AuthContext,
+    AuthContext {
+        user_id,
+        is_owner,
+        station,
+    }: AuthContext,
     Path(id): Path<String>,
     ValidatedJson(payload): ValidatedJson<UpdateChannelDto>,
 ) -> ApiResult<Channel> {
@@ -40,7 +46,11 @@ pub async fn update(
 }
 
 pub async fn delete(
-    AuthContext { user_id, is_owner, station }: AuthContext,
+    AuthContext {
+        user_id,
+        is_owner,
+        station,
+    }: AuthContext,
     Path(id): Path<String>,
 ) -> ApiResult<()> {
     tracing::debug!(channel_id = %id, user_id = %user_id, "Deleting channel");

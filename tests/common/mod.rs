@@ -95,7 +95,13 @@ pub fn access_token_with(user_id: &str, username: &str, sid: &str, lifetime_secs
     access_token_full(user_id, username, sid, lifetime_secs, false)
 }
 
-fn access_token_full(user_id: &str, username: &str, sid: &str, lifetime_secs: i64, owner: bool) -> String {
+fn access_token_full(
+    user_id: &str,
+    username: &str,
+    sid: &str,
+    lifetime_secs: i64,
+    owner: bool,
+) -> String {
     let state = shared_state();
     let now = chrono::Utc::now().timestamp();
     let claims = AccessClaims {

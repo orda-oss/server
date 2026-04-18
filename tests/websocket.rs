@@ -469,4 +469,3 @@ async fn ws_receives_role_created() {
 
     ws.close(None).await.ok();
 }
-

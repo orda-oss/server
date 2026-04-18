@@ -57,7 +57,11 @@ impl FromRequestParts<Arc<Orbit>> for AuthContext {
                     let station = state
                         .default_station()
                         .ok_or_else(|| ApiError::unauthorized(codes::ERR_SERVER_MISMATCH))?;
-                    return Ok(AuthContext { user_id, is_owner: true, station });
+                    return Ok(AuthContext {
+                        user_id,
+                        is_owner: true,
+                        station,
+                    });
                 } else {
                     return Err(ApiError::unauthorized(codes::ERR_MISSING_TOKEN));
                 }

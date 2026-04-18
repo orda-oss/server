@@ -64,7 +64,11 @@ pub const ROLE_MOD_ID: &str = "role-mod";
 pub const ROLE_MEMBER_ID: &str = "role-member";
 
 // Check if a server-level permission is granted
-pub fn has_server_permission(is_owner: bool, server_role: Option<&Role>, perm: Permissions) -> bool {
+pub fn has_server_permission(
+    is_owner: bool,
+    server_role: Option<&Role>,
+    perm: Permissions,
+) -> bool {
     if is_owner {
         return true;
     }
@@ -138,13 +142,15 @@ pub fn load_server_role(conn: &mut SqliteConnection, user_id: &str) -> Option<Ro
         .first::<Option<String>>(conn)
         .ok()
         .flatten()
-        .and_then(|rid| {
-            roles::table.find(&rid).first::<Role>(conn).ok()
-        })
+        .and_then(|rid| roles::table.find(&rid).first::<Role>(conn).ok())
 }
 
 // Load the channel-level role for a user in a specific channel
-pub fn load_channel_role(conn: &mut SqliteConnection, channel_id: &str, user_id: &str) -> Option<ChannelRole> {
+pub fn load_channel_role(
+    conn: &mut SqliteConnection,
+    channel_id: &str,
+    user_id: &str,
+) -> Option<ChannelRole> {
     channel_members::table
         .filter(channel_members::channel_id.eq(channel_id))
         .filter(channel_members::user_id.eq(user_id))

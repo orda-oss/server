@@ -7,7 +7,7 @@ use super::dto::{AssignRoleDto, CreateRoleDto, ServerMemberDto, UpdateRoleDto};
 use crate::{
     Station,
     core::{
-        models::{metadata::RoleMetadata, Role, Server, User},
+        models::{Role, Server, User, metadata::RoleMetadata},
         permissions::{self, Permissions, ROLE_ADMIN_ID, ROLE_MEMBER_ID, ROLE_MOD_ID},
         satellite::ServerEvent,
         types::SqliteJson,
@@ -113,13 +113,7 @@ impl RoleService {
                     server_members::joined_at,
                     User::as_select(),
                 ))
-                .load::<(
-                    String,
-                    Option<String>,
-                    Option<String>,
-                    Option<String>,
-                    User,
-                )>(&mut conn)
+                .load::<(String, Option<String>, Option<String>, Option<String>, User)>(&mut conn)
                 .map_err(ApiError::internal)
         })
         .await
@@ -127,15 +121,17 @@ impl RoleService {
 
         let response = rows
             .into_iter()
-            .map(|(user_id, role_id, nickname, joined_at, user)| ServerMemberDto {
-                user_id,
-                username: user.username,
-                discriminator: user.discriminator,
-                staff: user.staff,
-                role_id,
-                nickname,
-                joined_at,
-            })
+            .map(
+                |(user_id, role_id, nickname, joined_at, user)| ServerMemberDto {
+                    user_id,
+                    username: user.username,
+                    discriminator: user.discriminator,
+                    staff: user.staff,
+                    role_id,
+                    nickname,
+                    joined_at,
+                },
+            )
             .collect();
 
         Ok(ApiResponse::ok(response))
@@ -328,12 +324,10 @@ impl RoleService {
 
             // Unassign from all server members (ON DELETE SET NULL would also do this,
             // but we're explicit)
-            diesel::update(
-                server_members::table.filter(server_members::role_id.eq(&role_id)),
-            )
-            .set(server_members::role_id.eq::<Option<String>>(None))
-            .execute(&mut conn)
-            .map_err(ApiError::internal)?;
+            diesel::update(server_members::table.filter(server_members::role_id.eq(&role_id)))
+                .set(server_members::role_id.eq::<Option<String>>(None))
+                .execute(&mut conn)
+                .map_err(ApiError::internal)?;
 
             diesel::delete(roles::table.find(&role_id))
                 .execute(&mut conn)
@@ -397,15 +391,15 @@ impl RoleService {
                 .first::<Option<String>>(&mut conn)
                 .ok()
                 .flatten();
-            if let Some(current_rid) = current_role_id {
-                if let Ok(current) = roles::table.find(&current_rid).first::<Role>(&mut conn) {
-                    permissions::require_priority_above(
-                        &mut conn,
-                        &actor_user_id,
-                        is_owner,
-                        current.priority.unwrap_or(0),
-                    )?;
-                }
+            if let Some(current_rid) = current_role_id
+                && let Ok(current) = roles::table.find(&current_rid).first::<Role>(&mut conn)
+            {
+                permissions::require_priority_above(
+                    &mut conn,
+                    &actor_user_id,
+                    is_owner,
+                    current.priority.unwrap_or(0),
+                )?;
             }
 
             diesel::update(
@@ -454,7 +448,7 @@ impl RoleService {
             let role = permissions::load_server_role(&mut conn, &user_id);
             let perms = role
                 .as_ref()
-                .map(|r| Permissions::from_role(r))
+                .map(Permissions::from_role)
                 .unwrap_or(Permissions::empty());
 
             let effective = if perms.contains(Permissions::ADMINISTRATOR) {

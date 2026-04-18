@@ -30,7 +30,9 @@ const PING_INTERVAL: Duration = Duration::from_secs(30);
 /// Axum upgrade handler - extracts `user_id` and `station` from the JWT,
 /// then hands off to `handle_socket`. Returns `101 Switching Protocols`.
 pub async fn ws_handler(
-    AuthContext { user_id, station, .. }: AuthContext,
+    AuthContext {
+        user_id, station, ..
+    }: AuthContext,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, station, user_id))
